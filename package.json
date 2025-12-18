@@ -13,7 +13,10 @@
     "db:list-users": "node scripts/db-utils.js list-users",
     "db:list-sessions": "node scripts/db-utils.js list-sessions",
     "db:clear": "node scripts/db-utils.js clear",
-    "db:delete-user": "node scripts/db-utils.js delete-user"
+    "db:delete-user": "node scripts/db-utils.js delete-user",
+    "test:session-expiry": "node scripts/test-session-expiry.js",
+    "test:get-token": "node scripts/get-session-token.js",
+    "test:get-account-id": "node scripts/get-account-id.js"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.79.0",
