@@ -6,13 +6,28 @@ import { publicProcedure, router } from "../trpc";
 import { db } from "@/lib/db";
 import { users, sessions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { validatePassword } from "@/lib/utils/password-validation";
+
+// Password validation schema with complexity requirements
+const passwordSchema = z
+  .string()
+  .refine(
+    (password) => {
+      const result = validatePassword(password);
+      return result.isValid;
+    },
+    (password) => {
+      const result = validatePassword(password);
+      return { message: result.error || "Invalid password" };
+    }
+  );
 
 export const authRouter = router({
   signup: publicProcedure
     .input(
       z.object({
         email: z.string().email().toLowerCase(),
-        password: z.string().min(8),
+        password: passwordSchema,
         firstName: z.string().min(1),
         lastName: z.string().min(1),
         phoneNumber: z.string().regex(/^\+?\d{10,15}$/),
