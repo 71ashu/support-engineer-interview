@@ -16,7 +16,8 @@
     "db:delete-user": "node scripts/db-utils.js delete-user",
     "test:session-expiry": "node scripts/test-session-expiry.js",
     "test:get-token": "node scripts/get-session-token.js",
-    "test:get-account-id": "node scripts/get-account-id.js"
+    "test:get-account-id": "node scripts/get-account-id.js",
+    "test:performance": "tsx scripts/test-performance.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.79.0",

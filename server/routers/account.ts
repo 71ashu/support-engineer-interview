@@ -145,12 +145,12 @@ export const accountRouter = router({
         processedAt: new Date().toISOString(),
       });
 
-      // Fetch the created transaction
+      // Fetch the most recently created transaction for this account
       const transaction = await db
         .select()
         .from(transactions)
         .where(eq(transactions.accountId, input.accountId))
-        .orderBy(transactions.createdAt)
+        .orderBy(desc(transactions.createdAt))
         .limit(1)
         .get();
 
@@ -175,6 +175,8 @@ export const accountRouter = router({
     .input(
       z.object({
         accountId: z.number(),
+        limit: z.number().min(1).max(100).default(50).optional(),
+        offset: z.number().min(0).default(0).optional(),
       })
     )
     .query(async ({ input, ctx }) => {
@@ -192,22 +194,29 @@ export const accountRouter = router({
         });
       }
 
+      const limit = input.limit ?? 50;
+      const offset = input.offset ?? 0;
+
+      // Use JOIN to fetch transactions with account details in a single query (fixes N+1 problem)
       const accountTransactions = await db
-        .select()
+        .select({
+          id: transactions.id,
+          accountId: transactions.accountId,
+          type: transactions.type,
+          amount: transactions.amount,
+          description: transactions.description,
+          status: transactions.status,
+          createdAt: transactions.createdAt,
+          processedAt: transactions.processedAt,
+          accountType: accounts.accountType,
+        })
         .from(transactions)
+        .innerJoin(accounts, eq(transactions.accountId, accounts.id))
         .where(eq(transactions.accountId, input.accountId))
-        .orderBy(desc(transactions.createdAt));
+        .orderBy(desc(transactions.createdAt))
+        .limit(limit)
+        .offset(offset);
 
-      const enrichedTransactions = [];
-      for (const transaction of accountTransactions) {
-        const accountDetails = await db.select().from(accounts).where(eq(accounts.id, transaction.accountId)).get();
-
-        enrichedTransactions.push({
-          ...transaction,
-          accountType: accountDetails?.accountType,
-        });
-      }
-
-      return enrichedTransactions;
+      return accountTransactions;
     }),
 });
