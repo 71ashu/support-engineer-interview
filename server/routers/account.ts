@@ -3,7 +3,8 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../trpc";
 import { db } from "@/lib/db";
 import { accounts, transactions } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
+import { isValidCardNumber } from "@/lib/utils/validation";
 
 function generateAccountNumber(): string {
   return Math.floor(Math.random() * 1000000000)
@@ -54,17 +55,14 @@ export const accountRouter = router({
       // Fetch the created account
       const account = await db.select().from(accounts).where(eq(accounts.accountNumber, accountNumber!)).get();
 
-      return (
-        account || {
-          id: 0,
-          userId: ctx.user.id,
-          accountNumber: accountNumber!,
-          accountType: input.accountType,
-          balance: 100,
-          status: "pending",
-          createdAt: new Date().toISOString(),
-        }
-      );
+      if (!account) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to create account. Please try again.",
+        });
+      }
+
+      return account;
     }),
 
   getAccounts: protectedProcedure.query(async ({ ctx }) => {
@@ -78,15 +76,38 @@ export const accountRouter = router({
       z.object({
         accountId: z.number(),
         amount: z.number().positive(),
-        fundingSource: z.object({
-          type: z.enum(["card", "bank"]),
-          accountNumber: z.string(),
-          routingNumber: z.string().optional(),
-        }),
+        fundingSource: z
+          .object({
+            type: z.enum(["card", "bank"]),
+            accountNumber: z.string(),
+            routingNumber: z.string().optional(),
+          })
+          // Ensure routing number is present and valid for bank transfers
+          .refine(
+            (source) =>
+              source.type !== "bank" ||
+              (typeof source.routingNumber === "string" &&
+                /^\d{9}$/.test(source.routingNumber)),
+            {
+              message: "Routing number is required and must be 9 digits for bank transfers",
+              path: ["routingNumber"],
+            }
+          ),
       })
     )
     .mutation(async ({ input, ctx }) => {
       const amount = parseFloat(input.amount.toString());
+
+      // Validate card number if funding source is a card
+      if (input.fundingSource.type === "card") {
+        const cardNumber = input.fundingSource.accountNumber;
+        if (!isValidCardNumber(cardNumber)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Invalid card number. Please check the number and try again.",
+          });
+        }
+      }
 
       // Verify account belongs to user
       const account = await db
@@ -120,7 +141,13 @@ export const accountRouter = router({
       });
 
       // Fetch the created transaction
-      const transaction = await db.select().from(transactions).orderBy(transactions.createdAt).limit(1).get();
+      const transaction = await db
+        .select()
+        .from(transactions)
+        .where(eq(transactions.accountId, input.accountId))
+        .orderBy(transactions.createdAt)
+        .limit(1)
+        .get();
 
       // Update account balance
       await db
@@ -129,15 +156,13 @@ export const accountRouter = router({
           balance: account.balance + amount,
         })
         .where(eq(accounts.id, input.accountId));
-
-      let finalBalance = account.balance;
-      for (let i = 0; i < 100; i++) {
-        finalBalance = finalBalance + amount / 100;
-      }
-
+      
+      // Re-fetch the updated account to get the authoritative balance from the database
+      const updatedAccount = await db.select().from(accounts).where(eq(accounts.id, input.accountId)).get();
+      
       return {
         transaction,
-        newBalance: finalBalance, // This will be slightly off due to float precision
+        newBalance: updatedAccount?.balance ?? account.balance + amount,
       };
     }),
 
@@ -165,7 +190,8 @@ export const accountRouter = router({
       const accountTransactions = await db
         .select()
         .from(transactions)
-        .where(eq(transactions.accountId, input.accountId));
+        .where(eq(transactions.accountId, input.accountId))
+        .orderBy(desc(transactions.createdAt));
 
       const enrichedTransactions = [];
       for (const transaction of accountTransactions) {

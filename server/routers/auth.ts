@@ -6,21 +6,84 @@ import { publicProcedure, router } from "../trpc";
 import { db } from "@/lib/db";
 import { users, sessions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { validatePassword } from "@/lib/utils/password-validation";
+import { encryptSSN } from "@/lib/utils/encryption";
+import { isValidPhoneNumber } from "libphonenumber-js";
+import { isValidStateCode } from "@/lib/utils/stateCode-validation";
+
+// Password validation schema with complexity requirements
+const passwordSchema = z
+  .string()
+  .refine(
+    (password) => {
+      const result = validatePassword(password);
+      return result.isValid;
+    },
+    (password) => {
+      const result = validatePassword(password);
+      return { message: result.error || "Invalid password" };
+    }
+  );
 
 export const authRouter = router({
   signup: publicProcedure
     .input(
       z.object({
         email: z.string().email().toLowerCase(),
-        password: z.string().min(8),
+        password: passwordSchema,
         firstName: z.string().min(1),
         lastName: z.string().min(1),
-        phoneNumber: z.string().regex(/^\+?\d{10,15}$/),
-        dateOfBirth: z.string(),
+        dateOfBirth: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format")
+          .refine(
+            (dateStr) => {
+              const birthDate = new Date(dateStr + "T00:00:00"); // Normalize to midnight for date-only comparison
+              const today = new Date();
+              today.setHours(0, 0, 0, 0); // Normalize to midnight for date-only comparison
+              
+              // Check if date is valid and not in the future
+              if (isNaN(birthDate.getTime()) || birthDate > today) {
+                return false;
+              }
+              
+              // Calculate age based on calendar dates only (time is irrelevant)
+              const age = today.getFullYear() - birthDate.getFullYear();
+              const monthDiff = today.getMonth() - birthDate.getMonth();
+              const dayDiff = today.getDate() - birthDate.getDate();
+              const actualAge = monthDiff < 0 || (monthDiff === 0 && dayDiff < 0) ? age - 1 : age;
+              
+              return actualAge >= 18;
+            },
+            {
+              message: "Date of birth must be valid, not in the future, and you must be at least 18 years old",
+            }
+          ),
+        phoneNumber: z
+          .string()
+          .min(1, "Phone number is required")
+          .refine(
+            (value) => {
+              try {
+                return isValidPhoneNumber(value);
+              } catch {
+                return false;
+              }
+            },
+            {
+              message: "Please enter a valid international phone number (e.g., +1234567890)",
+            }
+          ),
         ssn: z.string().regex(/^\d{9}$/),
         address: z.string().min(1),
         city: z.string().min(1),
-        state: z.string().length(2).toUpperCase(),
+        state: z
+          .string()
+          .length(2)
+          .toUpperCase()
+          .refine((val) => isValidStateCode(val), {
+            message: "Invalid state code. Please use a valid 2-letter US state code.",
+          }),
         zipCode: z.string().regex(/^\d{5}$/),
       })
     )
@@ -35,10 +98,12 @@ export const authRouter = router({
       }
 
       const hashedPassword = await bcrypt.hash(input.password, 10);
+      const encryptedSSN = encryptSSN(input.ssn);
 
       await db.insert(users).values({
         ...input,
         password: hashedPassword,
+        ssn: encryptedSSN,
       });
 
       // Fetch the created user
@@ -72,7 +137,9 @@ export const authRouter = router({
         (ctx.res as Headers).set("Set-Cookie", `session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800`);
       }
 
-      return { user: { ...user, password: undefined }, token };
+      // Exclude sensitive fields from response
+      const { password, ssn, ...safeUser } = user;
+      return { user: safeUser, token };
     }),
 
   login: publicProcedure
@@ -120,7 +187,9 @@ export const authRouter = router({
         (ctx.res as Headers).set("Set-Cookie", `session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800`);
       }
 
-      return { user: { ...user, password: undefined }, token };
+      // Exclude sensitive fields from response
+      const { password, ssn, ...safeUser } = user;
+      return { user: safeUser, token };
     }),
 
   logout: publicProcedure.mutation(async ({ ctx }) => {

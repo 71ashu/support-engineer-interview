@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { trpc } from "@/lib/trpc/client";
 import Link from "next/link";
+import { validatePassword } from "@/lib/utils/password-validation";
+import { isValidPhoneNumber } from "libphonenumber-js";
+import { isValidStateCode } from "@/lib/utils/stateCode-validation";
 
 type SignupFormData = {
   email: string;
@@ -100,22 +103,18 @@ export default function SignupPage() {
                 <input
                   {...register("password", {
                     required: "Password is required",
-                    minLength: {
-                      value: 8,
-                      message: "Password must be at least 8 characters",
-                    },
-                    validate: {
-                      notCommon: (value) => {
-                        const commonPasswords = ["password", "12345678", "qwerty"];
-                        return !commonPasswords.includes(value.toLowerCase()) || "Password is too common";
-                      },
-                      hasNumber: (value) => /\d/.test(value) || "Password must contain a number",
+                    validate: (value) => {
+                      const result = validatePassword(value);
+                      return result.isValid || result.error;
                     },
                   })}
                   type="password"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border dark:bg-gray-800 dark:text-white dark:border-gray-600 dark:placeholder-gray-400"
                 />
                 {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>}
+                <p className="mt-1 text-xs text-gray-500">
+                  Password must be at least 8 characters and include uppercase, lowercase, number, and special character
+                </p>
               </div>
 
               <div>
@@ -172,13 +171,18 @@ export default function SignupPage() {
                 <input
                   {...register("phoneNumber", {
                     required: "Phone number is required",
-                    pattern: {
-                      value: /^\d{10}$/,
-                      message: "Phone number must be 10 digits",
+                    validate: (value) => {
+                      if (!value) return "Phone number is required";
+                      try {
+                        const isValid = isValidPhoneNumber(value);
+                        return isValid || "Please enter a valid international phone number (e.g., +1234567890)";
+                      } catch {
+                        return "Please enter a valid international phone number (e.g., +1234567890)";
+                      }
                     },
                   })}
                   type="tel"
-                  placeholder="1234567890"
+                  placeholder="+1234567890"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border dark:bg-gray-800 dark:text-white dark:border-gray-600 dark:placeholder-gray-400"
                 />
                 {errors.phoneNumber && <p className="mt-1 text-sm text-red-600">{errors.phoneNumber.message}</p>}
@@ -189,7 +193,34 @@ export default function SignupPage() {
                   Date of Birth
                 </label>
                 <input
-                  {...register("dateOfBirth", { required: "Date of birth is required" })}
+                  {...register("dateOfBirth", {
+                    required: "Date of birth is required",
+                    validate: (value) => {
+                      const birthDate = new Date(value + "T00:00:00"); // Normalize to midnight for date-only comparison
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0); // Normalize to midnight for date-only comparison
+                      
+                      if (isNaN(birthDate.getTime())) {
+                        return "Invalid date";
+                      }
+                      
+                      if (birthDate > today) {
+                        return "Date of birth cannot be in the future";
+                      }
+                      
+                      // Calculate age based on calendar dates only (time is irrelevant)
+                      const age = today.getFullYear() - birthDate.getFullYear();
+                      const monthDiff = today.getMonth() - birthDate.getMonth();
+                      const dayDiff = today.getDate() - birthDate.getDate();
+                      const actualAge = monthDiff < 0 || (monthDiff === 0 && dayDiff < 0) ? age - 1 : age;
+                      
+                      if (actualAge < 18) {
+                        return "You must be at least 18 years old to create an account";
+                      }
+                      
+                      return true;
+                    },
+                  })}
                   type="date"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border dark:bg-gray-800 dark:text-white dark:border-gray-600 dark:placeholder-gray-400"
                 />
@@ -255,10 +286,20 @@ export default function SignupPage() {
                         value: /^[A-Z]{2}$/,
                         message: "Use 2-letter state code",
                       },
+                      validate: {
+                        isValidState: (value) =>
+                          isValidStateCode(value.toUpperCase()) ||
+                          "Please enter a valid US state code (e.g., CA, NY, TX)",
+                      },
                     })}
                     type="text"
                     placeholder="CA"
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border dark:bg-gray-800 dark:text-white dark:border-gray-600 dark:placeholder-gray-400"
+                    maxLength={2}
+                    style={{ textTransform: "uppercase" }}
+                    onInput={(e) => {
+                      e.currentTarget.value = e.currentTarget.value.toUpperCase();
+                    }}
                   />
                   {errors.state && <p className="mt-1 text-sm text-red-600">{errors.state.message}</p>}
                 </div>
