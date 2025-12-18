@@ -8,6 +8,7 @@ import { users, sessions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { validatePassword } from "@/lib/utils/password-validation";
 import { encryptSSN } from "@/lib/utils/encryption";
+import { isValidPhoneNumber } from "libphonenumber-js";
 
 // Password validation schema with complexity requirements
 const passwordSchema = z
@@ -32,7 +33,6 @@ export const authRouter = router({
         password: passwordSchema,
         firstName: z.string().min(1),
         lastName: z.string().min(1),
-        phoneNumber: z.string().regex(/^\+?\d{10,15}$/),
         dateOfBirth: z
           .string()
           .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format")
@@ -57,6 +57,21 @@ export const authRouter = router({
             },
             {
               message: "Date of birth must be valid, not in the future, and you must be at least 18 years old",
+            }
+          ),
+        phoneNumber: z
+          .string()
+          .min(1, "Phone number is required")
+          .refine(
+            (value) => {
+              try {
+                return isValidPhoneNumber(value);
+              } catch {
+                return false;
+              }
+            },
+            {
+              message: "Please enter a valid international phone number (e.g., +1234567890)",
             }
           ),
         ssn: z.string().regex(/^\d{9}$/),
