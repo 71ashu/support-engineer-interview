@@ -20,6 +20,7 @@ type FundingFormData = {
 
 export function FundingModal({ accountId, onClose, onSuccess }: FundingModalProps) {
   const [error, setError] = useState("");
+  const utils = trpc.useUtils();
   const {
     register,
     handleSubmit,
@@ -57,6 +58,12 @@ export function FundingModal({ accountId, onClose, onSuccess }: FundingModalProp
           routingNumber: data.routingNumber,
         },
       });
+
+      // Ensure account data and transaction history are refreshed after a successful funding
+      await Promise.all([
+        utils.account.getAccounts.invalidate(),
+        utils.account.getTransactions.invalidate({ accountId }),
+      ]);
 
       onSuccess();
     } catch (err: any) {
