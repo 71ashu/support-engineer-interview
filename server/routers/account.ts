@@ -5,7 +5,7 @@ import { randomInt } from "crypto";
 import { db } from "@/lib/db";
 import { accounts, transactions } from "@/lib/db/schema";
 import { eq, and, desc } from "drizzle-orm";
-import { isValidCardNumber } from "@/lib/utils/validation";
+import { isValidCardNumber } from "@/lib/utils/card-validation";
 
 function generateAccountNumber(): string {
   // Use cryptographically secure random numbers to generate a 10‑digit account number
