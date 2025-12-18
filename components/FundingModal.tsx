@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { trpc } from "@/lib/trpc/client";
-import { isValidCardNumber } from "@/lib/utils/validation";
+import { isValidCardNumber } from "@/lib/utils/card-validation";
 
 interface FundingModalProps {
   accountId: number;

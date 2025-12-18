@@ -4,7 +4,7 @@ import { protectedProcedure, router } from "../trpc";
 import { db } from "@/lib/db";
 import { accounts, transactions } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { isValidCardNumber } from "@/lib/utils/validation";
+import { isValidCardNumber } from "@/lib/utils/card-validation";
 
 function generateAccountNumber(): string {
   return Math.floor(Math.random() * 1000000000)
