@@ -54,16 +54,20 @@ export async function createContext(opts: CreateNextContextOptions | FetchCreate
 
       const session = await db.select().from(sessions).where(eq(sessions.token, token)).get();
 
-      if (session && new Date(session.expiresAt) > new Date()) {
-        const userData = await db.select().from(users).where(eq(users.id, decoded.userId)).get();
-        if (userData) {
-          // Exclude sensitive fields from user object
-          const { password, ssn, ...safeUser } = userData;
-          user = safeUser;
-        }
-        const expiresIn = new Date(session.expiresAt).getTime() - new Date().getTime();
-        if (expiresIn < 60000) {
-          console.warn("Session about to expire");
+      if (session) {
+        const bufferMs = 5 * 60 * 1000; // 5 minutes in milliseconds
+        const expiresAtTime = new Date(session.expiresAt).getTime();
+        const currentTime = new Date().getTime();
+        const expiresIn = expiresAtTime - currentTime;
+
+        // Session is valid only if more than buffer time remains
+        if (expiresIn > bufferMs) {
+          const userData = await db.select().from(users).where(eq(users.id, decoded.userId)).get();
+          if (userData) {
+            // Exclude sensitive fields from user object
+            const { password, ssn, ...safeUser } = userData;
+            user = safeUser;
+          }
         }
       }
     } catch (error) {
