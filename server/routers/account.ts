@@ -1,15 +1,20 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../trpc";
+import { randomInt } from "crypto";
 import { db } from "@/lib/db";
 import { accounts, transactions } from "@/lib/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { isValidCardNumber } from "@/lib/utils/validation";
 
 function generateAccountNumber(): string {
-  return Math.floor(Math.random() * 1000000000)
-    .toString()
-    .padStart(10, "0");
+  // Use cryptographically secure random numbers to generate a 10‑digit account number
+  let accountNumber = "";
+  for (let i = 0; i < 10; i++) {
+    // randomInt(0, 10) returns a uniform integer in [0, 9]
+    accountNumber += randomInt(0, 10).toString();
+  }
+  return accountNumber;
 }
 
 export const accountRouter = router({
