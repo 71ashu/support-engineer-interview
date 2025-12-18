@@ -88,6 +88,14 @@ export const accountRouter = router({
     .mutation(async ({ input, ctx }) => {
       const amount = parseFloat(input.amount.toString());
 
+      // Explicit validation to prevent zero or negative amounts (defense in depth)
+      if (amount <= 0 || !isFinite(amount)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Amount must be greater than $0.00",
+        });
+      }
+
       // Verify account belongs to user
       const account = await db
         .select()
