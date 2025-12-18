@@ -31,7 +31,32 @@ export const authRouter = router({
         firstName: z.string().min(1),
         lastName: z.string().min(1),
         phoneNumber: z.string().regex(/^\+?\d{10,15}$/),
-        dateOfBirth: z.string(),
+        dateOfBirth: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format")
+          .refine(
+            (dateStr) => {
+              const birthDate = new Date(dateStr + "T00:00:00"); // Normalize to midnight for date-only comparison
+              const today = new Date();
+              today.setHours(0, 0, 0, 0); // Normalize to midnight for date-only comparison
+              
+              // Check if date is valid and not in the future
+              if (isNaN(birthDate.getTime()) || birthDate > today) {
+                return false;
+              }
+              
+              // Calculate age based on calendar dates only (time is irrelevant)
+              const age = today.getFullYear() - birthDate.getFullYear();
+              const monthDiff = today.getMonth() - birthDate.getMonth();
+              const dayDiff = today.getDate() - birthDate.getDate();
+              const actualAge = monthDiff < 0 || (monthDiff === 0 && dayDiff < 0) ? age - 1 : age;
+              
+              return actualAge >= 18;
+            },
+            {
+              message: "Date of birth must be valid, not in the future, and you must be at least 18 years old",
+            }
+          ),
         ssn: z.string().regex(/^\d{9}$/),
         address: z.string().min(1),
         city: z.string().min(1),
