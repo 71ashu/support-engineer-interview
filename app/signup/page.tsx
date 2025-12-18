@@ -7,6 +7,7 @@ import { trpc } from "@/lib/trpc/client";
 import Link from "next/link";
 import { validatePassword } from "@/lib/utils/password-validation";
 import { isValidPhoneNumber } from "libphonenumber-js";
+import { isValidStateCode } from "@/lib/utils/stateCode-validation";
 
 type SignupFormData = {
   email: string;
@@ -285,10 +286,20 @@ export default function SignupPage() {
                         value: /^[A-Z]{2}$/,
                         message: "Use 2-letter state code",
                       },
+                      validate: {
+                        isValidState: (value) =>
+                          isValidStateCode(value.toUpperCase()) ||
+                          "Please enter a valid US state code (e.g., CA, NY, TX)",
+                      },
                     })}
                     type="text"
                     placeholder="CA"
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border dark:bg-gray-800 dark:text-white dark:border-gray-600 dark:placeholder-gray-400"
+                    maxLength={2}
+                    style={{ textTransform: "uppercase" }}
+                    onInput={(e) => {
+                      e.currentTarget.value = e.currentTarget.value.toUpperCase();
+                    }}
                   />
                   {errors.state && <p className="mt-1 text-sm text-red-600">{errors.state.message}</p>}
                 </div>

@@ -9,6 +9,7 @@ import { eq } from "drizzle-orm";
 import { validatePassword } from "@/lib/utils/password-validation";
 import { encryptSSN } from "@/lib/utils/encryption";
 import { isValidPhoneNumber } from "libphonenumber-js";
+import { isValidStateCode } from "@/lib/utils/stateCode-validation";
 
 // Password validation schema with complexity requirements
 const passwordSchema = z
@@ -23,7 +24,6 @@ const passwordSchema = z
       return { message: result.error || "Invalid password" };
     }
   );
-
 
 export const authRouter = router({
   signup: publicProcedure
@@ -77,7 +77,13 @@ export const authRouter = router({
         ssn: z.string().regex(/^\d{9}$/),
         address: z.string().min(1),
         city: z.string().min(1),
-        state: z.string().length(2).toUpperCase(),
+        state: z
+          .string()
+          .length(2)
+          .toUpperCase()
+          .refine((val) => isValidStateCode(val), {
+            message: "Invalid state code. Please use a valid 2-letter US state code.",
+          }),
         zipCode: z.string().regex(/^\d{5}$/),
       })
     )
