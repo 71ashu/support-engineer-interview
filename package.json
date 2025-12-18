@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test:funding": "tsx scripts/fund-account-100.ts",
+    "db:reset-user-balances": "node scripts/reset-balances.js",
     "test": "echo 'Please configure your test runner'",
     "db:list-users": "node scripts/db-utils.js list-users",
     "db:list-sessions": "node scripts/db-utils.js list-sessions",
