@@ -76,11 +76,23 @@ export const accountRouter = router({
       z.object({
         accountId: z.number(),
         amount: z.number().positive(),
-        fundingSource: z.object({
-          type: z.enum(["card", "bank"]),
-          accountNumber: z.string(),
-          routingNumber: z.string().optional(),
-        }),
+        fundingSource: z
+          .object({
+            type: z.enum(["card", "bank"]),
+            accountNumber: z.string(),
+            routingNumber: z.string().optional(),
+          })
+          // Ensure routing number is present and valid for bank transfers
+          .refine(
+            (source) =>
+              source.type !== "bank" ||
+              (typeof source.routingNumber === "string" &&
+                /^\d{9}$/.test(source.routingNumber)),
+            {
+              message: "Routing number is required and must be 9 digits for bank transfers",
+              path: ["routingNumber"],
+            }
+          ),
       })
     )
     .mutation(async ({ input, ctx }) => {
