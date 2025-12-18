@@ -8,6 +8,7 @@ import Link from "next/link";
 import { validatePassword } from "@/lib/utils/password-validation";
 import { isValidPhoneNumber } from "libphonenumber-js";
 import { isValidStateCode } from "@/lib/utils/stateCode-validation";
+import { validateEmail, willBeLowercased } from "@/lib/utils/email-validation";
 
 type SignupFormData = {
   email: string;
@@ -39,6 +40,7 @@ export default function SignupPage() {
   const signupMutation = trpc.auth.signup.useMutation();
 
   const password = watch("password");
+  const email = watch("email");
 
   const nextStep = async () => {
     let fieldsToValidate: (keyof SignupFormData)[] = [];
@@ -60,7 +62,13 @@ export default function SignupPage() {
   const onSubmit = async (data: SignupFormData) => {
     try {
       setError("");
-      await signupMutation.mutateAsync(data);
+      // Normalize email to lowercase before sending to the API
+      const payload: SignupFormData = {
+        ...data,
+        email: data.email.trim().toLowerCase(),
+      };
+
+      await signupMutation.mutateAsync(payload);
       router.push("/dashboard");
     } catch (err: any) {
       setError(err.message || "Something went wrong");
@@ -85,15 +93,23 @@ export default function SignupPage() {
                 <input
                   {...register("email", {
                     required: "Email is required",
-                    pattern: {
-                      value: /^\S+@\S+$/i,
-                      message: "Invalid email address",
+                    validate: (value) => {
+                      const validation = validateEmail(value);
+                      if (!validation.isValid) {
+                        return validation.error || "Invalid email address";
+                      }
+                      return true;
                     },
                   })}
                   type="email"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border dark:bg-gray-800 dark:text-white dark:border-gray-600 dark:placeholder-gray-400"
                 />
                 {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
+                {email && willBeLowercased(email) && !errors.email && (
+                  <p className="mt-1 text-sm text-amber-600">
+                    ⚠️ Your email will be converted to lowercase: {email.toLowerCase()}
+                  </p>
+                )}
               </div>
 
               <div>
