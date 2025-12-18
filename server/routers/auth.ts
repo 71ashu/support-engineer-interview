@@ -6,6 +6,7 @@ import { publicProcedure, router } from "../trpc";
 import { db } from "@/lib/db";
 import { users, sessions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { isValidPhoneNumber } from "libphonenumber-js";
 
 export const authRouter = router({
   signup: publicProcedure
@@ -15,7 +16,21 @@ export const authRouter = router({
         password: z.string().min(8),
         firstName: z.string().min(1),
         lastName: z.string().min(1),
-        phoneNumber: z.string().regex(/^\+?\d{10,15}$/),
+        phoneNumber: z
+          .string()
+          .min(1, "Phone number is required")
+          .refine(
+            (value) => {
+              try {
+                return isValidPhoneNumber(value);
+              } catch {
+                return false;
+              }
+            },
+            {
+              message: "Please enter a valid international phone number (e.g., +1234567890)",
+            }
+          ),
         dateOfBirth: z.string(),
         ssn: z.string().regex(/^\d{9}$/),
         address: z.string().min(1),
