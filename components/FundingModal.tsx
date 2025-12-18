@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { trpc } from "@/lib/trpc/client";
+import { isValidCardNumber } from "@/lib/utils/validation";
 
 interface FundingModalProps {
   accountId: number;
@@ -23,15 +24,23 @@ export function FundingModal({ accountId, onClose, onSuccess }: FundingModalProp
     register,
     handleSubmit,
     watch,
+    getValues,
+    trigger,
     formState: { errors },
   } = useForm<FundingFormData>({
     defaultValues: {
       fundingType: "card",
     },
+    mode: "onChange", // Validate on change for better UX
   });
 
   const fundingType = watch("fundingType");
   const fundAccountMutation = trpc.account.fundAccount.useMutation();
+
+  // Re-validate account number when funding type changes
+  useEffect(() => {
+    trigger("accountNumber");
+  }, [fundingType, trigger]);
 
   const onSubmit = async (data: FundingFormData) => {
     setError("");
@@ -112,20 +121,38 @@ export function FundingModal({ accountId, onClose, onSuccess }: FundingModalProp
             <input
               {...register("accountNumber", {
                 required: `${fundingType === "card" ? "Card" : "Account"} number is required`,
-                pattern: {
-                  value: fundingType === "card" ? /^\d{16}$/ : /^\d+$/,
-                  message: fundingType === "card" ? "Card number must be 16 digits" : "Invalid account number",
-                },
                 validate: {
+                  format: (value) => {
+                    // Get current funding type to ensure we have the latest value
+                    const currentFundingType = getValues("fundingType");
+                    if (currentFundingType === "card") {
+                      // Allow digits, spaces, and dashes for card numbers
+                      const cleaned = value.replace(/\s|-/g, "");
+                      if (!/^\d{13,19}$/.test(cleaned)) {
+                        return "Card number must be 13-19 digits";
+                      }
+                    } else {
+                      // For bank accounts, just digits
+                      if (!/^\d+$/.test(value)) {
+                        return "Invalid account number";
+                      }
+                    }
+                    return true;
+                  },
                   validCard: (value) => {
-                    if (fundingType !== "card") return true;
-                    return value.startsWith("4") || value.startsWith("5") || "Invalid card number";
+                    // Get current funding type to ensure we have the latest value
+                    const currentFundingType = getValues("fundingType");
+                    if (currentFundingType !== "card") return true;
+                    if (!isValidCardNumber(value)) {
+                      return "Invalid card number. Please check the number and try again.";
+                    }
+                    return true;
                   },
                 },
               })}
               type="text"
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border dark:bg-gray-800 dark:text-white dark:border-gray-600 dark:placeholder-gray-400"
-              placeholder={fundingType === "card" ? "1234567812345678" : "123456789"}
+              placeholder={fundingType === "card" ? "1234 5678 9012 3456" : "123456789"}
             />
             {errors.accountNumber && <p className="mt-1 text-sm text-red-600">{errors.accountNumber.message}</p>}
           </div>

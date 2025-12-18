@@ -4,6 +4,7 @@ import { protectedProcedure, router } from "../trpc";
 import { db } from "@/lib/db";
 import { accounts, transactions } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
+import { isValidCardNumber } from "@/lib/utils/validation";
 
 function generateAccountNumber(): string {
   return Math.floor(Math.random() * 1000000000)
@@ -87,6 +88,17 @@ export const accountRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const amount = parseFloat(input.amount.toString());
+
+      // Validate card number if funding source is a card
+      if (input.fundingSource.type === "card") {
+        const cardNumber = input.fundingSource.accountNumber;
+        if (!isValidCardNumber(cardNumber)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Invalid card number. Please check the number and try again.",
+          });
+        }
+      }
 
       // Verify account belongs to user
       const account = await db
