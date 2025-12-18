@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { users, sessions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { validatePassword } from "@/lib/utils/password-validation";
+import { encryptSSN } from "@/lib/utils/encryption";
 
 // Password validation schema with complexity requirements
 const passwordSchema = z
@@ -21,6 +22,7 @@ const passwordSchema = z
       return { message: result.error || "Invalid password" };
     }
   );
+
 
 export const authRouter = router({
   signup: publicProcedure
@@ -75,10 +77,12 @@ export const authRouter = router({
       }
 
       const hashedPassword = await bcrypt.hash(input.password, 10);
+      const encryptedSSN = encryptSSN(input.ssn);
 
       await db.insert(users).values({
         ...input,
         password: hashedPassword,
+        ssn: encryptedSSN,
       });
 
       // Fetch the created user
@@ -112,7 +116,9 @@ export const authRouter = router({
         (ctx.res as Headers).set("Set-Cookie", `session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800`);
       }
 
-      return { user: { ...user, password: undefined }, token };
+      // Exclude sensitive fields from response
+      const { password, ssn, ...safeUser } = user;
+      return { user: safeUser, token };
     }),
 
   login: publicProcedure
@@ -160,7 +166,9 @@ export const authRouter = router({
         (ctx.res as Headers).set("Set-Cookie", `session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800`);
       }
 
-      return { user: { ...user, password: undefined }, token };
+      // Exclude sensitive fields from response
+      const { password, ssn, ...safeUser } = user;
+      return { user: safeUser, token };
     }),
 
   logout: publicProcedure.mutation(async ({ ctx }) => {
