@@ -132,7 +132,13 @@ export const accountRouter = router({
       });
 
       // Fetch the created transaction
-      const transaction = await db.select().from(transactions).orderBy(transactions.createdAt).limit(1).get();
+      const transaction = await db
+        .select()
+        .from(transactions)
+        .where(eq(transactions.accountId, input.accountId))
+        .orderBy(transactions.createdAt)
+        .limit(1)
+        .get();
 
       // Update account balance
       await db
@@ -141,15 +147,13 @@ export const accountRouter = router({
           balance: account.balance + amount,
         })
         .where(eq(accounts.id, input.accountId));
-
-      let finalBalance = account.balance;
-      for (let i = 0; i < 100; i++) {
-        finalBalance = finalBalance + amount / 100;
-      }
-
+      
+      // Re-fetch the updated account to get the authoritative balance from the database
+      const updatedAccount = await db.select().from(accounts).where(eq(accounts.id, input.accountId)).get();
+      
       return {
         transaction,
-        newBalance: finalBalance, // This will be slightly off due to float precision
+        newBalance: updatedAccount?.balance ?? account.balance + amount,
       };
     }),
 
