@@ -153,29 +153,59 @@ export const authRouter = router({
     }),
 
   logout: publicProcedure.mutation(async ({ ctx }) => {
-    if (ctx.user) {
-      // Delete session from database
-      let token: string | undefined;
-      if ("cookies" in ctx.req) {
-        token = (ctx.req as any).cookies.session;
-      } else {
-        const cookieHeader = ctx.req.headers.get?.("cookie") || (ctx.req.headers as any).cookie;
-        token = cookieHeader
-          ?.split("; ")
-          .find((c: string) => c.startsWith("session="))
-          ?.split("=")[1];
-      }
-      if (token) {
+    // Always attempt to invalidate the session based on the cookie,
+    // regardless of whether ctx.user is currently populated.
+    let token: string | undefined;
+
+    if ("cookies" in ctx.req) {
+      // Fetch / App Router-style request (Headers-based)
+      const cookieHeader = ctx.req.headers.get?.("cookie") || (ctx.req.headers as any).cookie || "";
+      const cookiesObj = Object.fromEntries(
+        cookieHeader
+          .split("; ")
+          .filter(Boolean)
+          .map((c: string) => {
+            const [key, ...val] = c.split("=");
+            return [key, val.join("=")];
+          })
+      );
+      token = cookiesObj.session;
+    }
+
+    let hadActiveSession = false;
+
+    if (token) {
+      try {
+        // Decode the token so we can revoke ALL sessions for this user,
+        // not just the single session row that matches this token.
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || "temporary-secret-for-interview") as {
+          userId: number;
+        };
+
+        hadActiveSession = true;
+
+        // Revoke all sessions for this user to ensure no stale tokens remain valid.
+        await db.delete(sessions).where(eq(sessions.userId, decoded.userId));
+      } catch {
+        // If the token is invalid or can't be decoded, fall back to best-effort revocation by token value.
+        hadActiveSession = true;
         await db.delete(sessions).where(eq(sessions.token, token));
       }
     }
 
+    // Clear the cookie on the client either way
     if ("setHeader" in ctx.res) {
       ctx.res.setHeader("Set-Cookie", `session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
     } else {
       (ctx.res as Headers).set("Set-Cookie", `session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
     }
 
-    return { success: true, message: ctx.user ? "Logged out successfully" : "No active session" };
+    return {
+      // The operation completed successfully (cookie cleared, session invalidated if present)
+      success: true,
+      // For debugging or callers that care about whether there *was* an active session
+      hadActiveSession,
+      message: hadActiveSession ? "Logged out successfully" : "You were already logged out",
+    };
   }),
 });
